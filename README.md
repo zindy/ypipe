@@ -5,6 +5,8 @@ A hardware device (STM32duino based) for spying on RS232 communications.
 The Y-Pipe is a device that replaces the RS232 link between the *original controller* and the *device*, and can be used for injecting commands from a
 second *substitute controller* while simultaneously logging traffic between all three machines.
 
+![Y-Pipe principle](https://raw.githubusercontent.com/zindy/ypipe/master/docs/ypipe_principal.gif)
+
 ## Hardware
 So far, the Y-Pipe has been tested on the [Blue Pill](https://stm32duinoforum.com/forum/wiki_subdomain/index_title_Blue_Pill.html) and on the [Maple Mini](https://stm32duinoforum.com/forum/wiki_subdomain/index_title_Maple_Mini.html). Both of these are STM32F103 based devices.
 RS232 communication from the device and to the original controller is handled through any kind of [MAX3232 clone module](https://www.sparkfun.com/products/11189) as long as the sockets and plugs match.
