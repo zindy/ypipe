@@ -10,7 +10,7 @@ second *substitute controller* while simultaneously logging traffic between all 
 ## Hardware
 So far, the Y-Pipe has been tested on the [Blue Pill](https://stm32duinoforum.com/forum/wiki_subdomain/index_title_Blue_Pill.html) and on the [Maple Mini](https://stm32duinoforum.com/forum/wiki_subdomain/index_title_Maple_Mini.html). Both of these are STM32F103 based devices.
 RS232 communication from the device and to the original controller is handled through any kind of [MAX3232 clone module](https://www.sparkfun.com/products/11189) as long as the sockets and plugs match.
-[Isolated modules](https://www.aliexpress.com/wholesale?SearchText=RS232+232+to+TTL+power+isolation) exist and should be used to prevent ground loops and protect the original equipment.
+[Electrically isolated modules](https://www.aliexpress.com/wholesale?SearchText=RS232+232+to+TTL+power+isolation) do exist and should be used to prevent ground loops and protect the original equipment.
 
 The reason for using a STM32F103 based device is the fabulous [USBComposite_stm32f1 library](https://github.com/arpruss/USBComposite_stm32f1) which allows the microcontroller
 board to be seen as two separate USB serial devices on the substitute controller, one to inject commands and one for logging all the traffic.
