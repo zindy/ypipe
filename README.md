@@ -38,12 +38,15 @@ Through the Y-Pipe and **using a lot of caution**, it is possible to control the
 **TODO** Expand this section.
 
 # Usage
-Two things can be changed through the logging/console port and saved in the Y-Pipe EEPROM memory:
+Console mode is entered by pressing ENTER. This stops the logging of traffic from the controllers and device until console mode is exited by typing 'x'.
+
+Two things can be changed and saved in the Y-Pipe EEPROM memory:
 * 'b' on its own in a terminal window displays the current baud rate between controller and device. b+BAUDRATE (e.g. 'b115200') changes the current baud rate.
 Valid options are 9600, 19200, 38400, 57600 and 115200.
 *  'd' on its own displays the current delimiter value: '\\r', '\\n', '\\r\\n'. To change the delimiter, issue 'dr', 'dn' or 'drn'.
 
 Additional commands are:
 * 'H' for help
-* 'W' for who am I? which displays each role on the corresponding terminal window (if connected).
+* 'W' for who am I? which displays each role on the corresponding terminal window (if connected)
+* 'x' to exit the console mode.
 
