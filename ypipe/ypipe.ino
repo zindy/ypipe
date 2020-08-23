@@ -30,10 +30,10 @@ USBMultiSerial<2> ms;
 
 // Some strings we'll be using for display stuff. These are stored in PROGMEM
 const uint32_t baudRates[] PROGMEM = {9600, 19200, 38400, 57600, 115200};
-const char delimMsg[] PROGMEM = "C> delim set to \\";
-const char baudMsg[] PROGMEM = "C> Baud rate between RS232 devices set to ";
-const char welcomeMsg[] PROGMEM = "C> This is the console, type H for help (C> console, U> USB, S> serial, D> device)";
-const char helpMsg[] PROGMEM = "C> Use W to locate all four consoles\r\n" \
+const char delimMsg[] PROGMEM = "delim set to \\";
+const char baudMsg[] PROGMEM = "Baud rate between RS232 devices set to ";
+const char welcomeMsg[] PROGMEM = "C> This is the console. Type H for help, X to exit";
+const char helpMsg[] PROGMEM = "Use W to locate all four consoles\r\n" \
     "C> d for delimiter (dr for \\r, dn for \\n, drn for \\r\\n\\r\\n)\r\n" \
     "C> b for baudrate (b9600, b19200, b38400, b57600,  b115200)";
 
@@ -48,6 +48,8 @@ uint32_t elapsed_tB;
 uint32_t elapsed_t1;
 uint32_t elapsed_t2;
 uint32_t baud_rate;
+
+bool isConsoled = false;
 
 // Delimiter is at EEPROM address 0
 //    '\n' or '0x0A' (10 in decimal) -> This character is called "Line Feed" (LF).
@@ -109,31 +111,45 @@ void setup() {
 void loop() {
     char s;
     uint32_t now = millis();
-
     digitalWrite(BOARD_LED_PIN, !digitalRead(BOARD_LED_PIN));
 
     // USB debug port (port1)
     while (ms.ports[1].available() > 0) {
         elapsed_tB = now;
         s=(char)ms.ports[1].read();
-        if (s == '\n' || s == '\r') {
-            uint8_t tl = rxMsgB.length();
-            if (tl == 0) continue;
+        uint8_t tl = rxMsgB.length();
+        bool isError = false;
+        
+        //ms.ports[0].println((uint32_t)s);
 
-            if(rxMsgB=="H")  { 
+        if (s == '\n' || s == '\r') {
+            if (tl == 0) {
+                if (!isConsoled) {
+                    isConsoled = true;
+                    ms.ports[1].print(welcomeMsg);
+                }
+            }
+            if (isConsoled) ms.ports[1].write("\r\nC> ");
+
+            if (rxMsgB=="x" || rxMsgB == "X")  { 
+                ms.ports[1].write("bye\r\n");
+                isConsoled = false;
+            } else if (rxMsgB=="H")  { 
                 // The help message
                 ms.ports[1].println(helpMsg);
-            } else if(rxMsgB=="W") {
+            } else if (rxMsgB=="W") {
                 // Who does what?
                 ms.ports[0].println("USB");
                 ms.ports[1].println("CONSOLE");
                 Serial1.println("Ser1");
                 Serial2.println("Ser2");
-            } else if(rxMsgB.startsWith("b")) {
+            } else if (rxMsgB.startsWith("b")) {
                 if (tl > 1) {
                     uint32_t br = rxMsgB.substring(1).toInt();
-                    for (uint8_t i=0; i < 5; i++) {
+                    isError = true;
+                    for (uint8_t i=0; i<5; i++) {
                         if (br == baudRates[i]) {
+                            isError = false;
                             Serial1.begin(baud_rate);
                             Serial2.begin(baud_rate);
                             baud_rate = br;
@@ -145,39 +161,69 @@ void loop() {
                         }
                     }
                 }
-                ms.ports[1].print(baudMsg);
-                ms.ports[1].println(baud_rate);
-            } else if(rxMsgB.startsWith("d")) {
+                if (!isError) {
+                    ms.ports[1].print(baudMsg);
+                    ms.ports[1].println(baud_rate);
+                }
+            } else if (rxMsgB.startsWith("d")) {
                 uint8_t index = delim_index;
                 if (tl > 1) {
-                    if(rxMsgB=="dr") {
+                    if (rxMsgB=="dr") {
                         // delim change
                         delim = "\r";
                         index = 0;
-                    } else if(rxMsgB=="dn") {
+                    } else if (rxMsgB=="dn") {
                         // delim change
                         delim = "\n";
                         index = 1;
-                    } else if(rxMsgB=="drn") {
+                    } else if (rxMsgB=="drn") {
                         // delim change
                         delim = "\r\n";
                         index = 2;
+                    } else
+                        isError = true;
+                }
+                if (!isError) {
+                    printDelim(index);
+                    if (index != delim_index) {
+                        delim_index = index;
+                        EEPROM.update(1, delim_index);
                     }
                 }
-                printDelim(index);
-                if (index != delim_index) {
-                    delim_index = index;
-                    EEPROM.update(1, delim_index);
-                }
+            } else {
+                // An error only if we didn't press ENTER
+                if (tl > 0) isError = true;
             }
 
+            if (isError)
+                ms.ports[1].println("Huh?");
+
             // A command was issued. Clear the input buffer
-            rxMsgB = "";
-        } else {  
-            rxMsgB += s; 
-            if (rxMsgB.length() >= MAXLENGTH) {
+            if (tl > 0) {
                 rxMsgB = "";
+                if (isConsoled) ms.ports[1].write("C> ");
             }
+
+        } else {  
+            if (!isConsoled)
+                continue;
+
+            bool isDisplay = true;
+
+            // delete is 127, backspace is 8
+            if (s == 127 || s == 8) {
+                if (tl > 0)
+                    rxMsgB = rxMsgB.substring(0, tl-1);
+                else
+                    isDisplay = false;
+            } else {
+                if (tl > MAXLENGTH) {
+                    rxMsgB = "";
+                    ms.ports[1].print("\r\nC> Huh?\n\rC> ");
+                }
+                rxMsgB += s; 
+            }
+            if (isDisplay) ms.ports[1].write(s);
         }
     }
 
@@ -185,24 +231,26 @@ void loop() {
     while (ms.ports[0].available() > 0) {
         elapsed_tA = now;
         s=(char)ms.ports[0].read();
+        uint8_t tl = rxMsgA.length();
+
         if (s == '\n' || s == '\r') {
-            if (rxMsgA.length() == 0)
+            if (tl == 0)
                 continue;
 
             // Goes to device...
             Serial2.print(rxMsgA + delim);
 
-            // Debug means we want to know what's going on...
-            ms.ports[1].write("U> ");
-            ms.ports[1].println(rxMsgA);
+            // Quiet if in console mode
+            if (!isConsoled) {
+                ms.ports[1].write("U> ");
+                ms.ports[1].println(rxMsgA);
+            }
 
             // Clear the input buffer
             rxMsgA = "";
         } else {  
-            rxMsgA += s;
-            if (rxMsgA.length() >= MAXLENGTH) {
-                rxMsgA = "";
-            }
+            // Add the character or clear the string if too long
+            rxMsgA = (tl < MAXLENGTH) ? rxMsgA+s : "";
         }
     }
 
@@ -210,6 +258,7 @@ void loop() {
     while (Serial1.available() > 0) {
         elapsed_t1 = now;
         s=(char)Serial1.read();
+        uint8_t tl = rxMsg1.length();
 
         if (s == '\n' || s == '\r') {
             if (rxMsg1.length() == 0)
@@ -218,17 +267,17 @@ void loop() {
             // Goes to device...
             Serial2.print(rxMsg1 + delim);
 
-            // Debug means we want to know what's going on...
-            ms.ports[1].write("S> ");
-            ms.ports[1].println(rxMsg1);
+            // Quiet if in console mode
+            if (!isConsoled) {
+                ms.ports[1].write("S> ");
+                ms.ports[1].println(rxMsg1);
+            }
 
             // Clear the input buffer
             rxMsg1 = "";
         } else {  
-            rxMsg1 += s;
-            if (rxMsg1.length() >= MAXLENGTH) {
-                rxMsg1 = "";
-            }
+            // Add the character or clear the string if too long
+            rxMsg1 = (tl < MAXLENGTH) ? rxMsg1+s : "";
         }
     }
 
@@ -236,6 +285,7 @@ void loop() {
     while (Serial2.available() > 0) {
         elapsed_t2 = now;
         s=(char)Serial2.read();
+        uint8_t tl = rxMsg2.length();
 
         if (s == '\n' || s == '\r') {
             if (rxMsg2.length() == 0)
@@ -250,17 +300,17 @@ void loop() {
             // Goes to serial controller...
             Serial1.print(rxMsg2 + delim);
 
-            // Debug means we want to know what's going on...
-            ms.ports[1].write("D> ");
-            ms.ports[1].println(rxMsg2);
+            // Quiet if in console mode
+            if (!isConsoled) {
+                ms.ports[1].write("D> ");
+                ms.ports[1].println(rxMsg2);
+            }
 
             // Clear the input buffer
             rxMsg2 = "";
         } else {  
-            rxMsg2 += s;
-            if (rxMsg2.length() >= MAXLENGTH) {
-                rxMsg2 = "";
-            }
+            // Add the character or clear the string if too long
+            rxMsg2 = (tl < MAXLENGTH) ? rxMsg2+s : "";
         }
     }
 
@@ -274,6 +324,10 @@ void loop() {
         rxMsgA = ""; elapsed_tA = now;
     }
     if (now - elapsed_tB >= SERIAL_TIMEOUT) {
+        // Here we decide we waited long enough and clear the string.
+        // We're telling the user
+        if (rxMsgB.length() > 0)
+            ms.ports[1].print("\r\nC> Huh?\n\rC> ");
         rxMsgB = ""; elapsed_tB = now;
     }
 
