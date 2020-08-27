@@ -32,8 +32,8 @@ On the Y-Pipe, the substitute controller link (USB) is completely symmetrical an
 log the traffic that comes back. For example, you want to reverse engineer an illumination device with an RS232 port and the control software works fine on a modern
 machine using a USB to RS232 adapter. In this case, the Y-Pipe *replaces* the adapter and gives you a second serial port to log the traffic.
 
-## Command mismatch
-This may require some programming, but it is possible to replace substrings on the fly.
+## Command injection / mutation
+This may require some programming, but it is possible to replace substrings on the fly, from any of the controllers or from the device.
 This is useful when either the original controller or the device sends strings which make the original controller misbehave.
 Another use is when the controller was designed with a different device from the one you have and maybe changing the identification string sent back by the device unlocks
 the controller software.
@@ -41,8 +41,8 @@ the controller software.
 ## Comparing the original software traffic to that of an alternative stack
 Through the Y-Pipe and **using a lot of caution**, it is possible to control the device using two software stacks simultaneously and compare the responses sent back by the device. Original, Substitute and Device traffic is labelled as such through the logging port.
 
-## TODO: Two separate applications on the same computer controlling a single device
-This would require an additional USB device (so a &Psi;-Pipe?) and would be interesting to use when the overall control software (Micro-Manager, Metamorph, ...) only provides some basic level of integration, but the manufacturer of the device has a much more compelling bit of software. Unfortunately in most cases (unless the device has a USB and RS232 port that can be used simultaneously), you can only use one at a time. Using the ideas here however, a USB to RS232 widget could be built to provide control from both applications independently, because two separate USB serial ports would be provided. A 3rd one, the serial console, would be provided to select RS232 baud-rate and delimiter (see below).
+## Two separate applications on the same computer controlling a single device
+This uses the 3rd USB device (a &Psi;-Pipe rather than a Y-Pipe) and makes sense when the chosen control software (Micro-Manager, Metamorph, ...) only provides some basic level of integration, but the manufacturer of the device has a much more compelling bit of software. Unfortunately in most cases (unless the device has a USB and RS232 port that can be used simultaneously), you can only use one at a time. All the software is here to build a USB to RS232 widget which provides control from both applications independently, because two separate USB serial ports (plus one of the console) are provided. The console is connected to the top-most serial port, and is used to select RS232 baud-rate and delimiter (see below).
 
 # Compilation
 The Y-Pipe software relies on Roger Clarke's Arduino_STM32 core libraries and can easily be compiled and uploaded via the Arduino IDE. Very briefly, install the Arduino SAM boards (Cortex-M3) and clone the [Arduino_STM32 repository](https://github.com/rogerclarkmelbourne/Arduino_STM32) into your Arduino/hardware folder. Full instructions in the [Arduino_STM32 wiki](https://github.com/rogerclarkmelbourne/Arduino_STM32/wiki/Installation).
