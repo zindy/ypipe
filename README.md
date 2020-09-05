@@ -7,6 +7,10 @@ second *substitute controller* while simultaneously logging traffic between all 
 
 ![Y-Pipe principle](docs/ypipe_principal.gif)
 
+With an RDP connection from the Substitute Controller to the Original Controller (e.g. with an Ethernet cable between the two machines and a shared local network), all the reverse engineering work can be done from a single screen / keyboard / mouse.
+
+![Desktop showing RDP and kitty.exe logging away](docs/desktop_attovision_kitty.png)
+
 ## Hardware
 So far, the Y-Pipe has been tested on the [Blue Pill](https://stm32duinoforum.com/forum/wiki_subdomain/index_title_Blue_Pill.html) and on the [Maple Mini](https://stm32duinoforum.com/forum/wiki_subdomain/index_title_Maple_Mini.html). Both of these are STM32F103 based devices.
 
@@ -14,6 +18,8 @@ So far, the Y-Pipe has been tested on the [Blue Pill](https://stm32duinoforum.co
 
 The reason for using a STM32F103 based device is the fabulous [USBComposite_stm32f1 library](https://github.com/arpruss/USBComposite_stm32f1) which is part of the [Arduino_STM32](https://github.com/rogerclarkmelbourne/Arduino_STM32) ) library and allows the microcontroller
 board to be seen as two separate USB serial devices on the substitute controller, one to inject commands and one for logging all the traffic.
+
+As to which one is the better option, that's a tricky question. The Maple bootloader needs to access the main serial port to switch to DFU mode, which may not be available if the connection is being used. This isn't an issue when programming the Blue pill with an STLink. The Maple Mini is thinner and the choice between Micro-USB and Mini-USB is a matter of choice.
 
 RS232 communication from the device and to the original controller is handled through any kind of [MAX3232 clone module](https://www.sparkfun.com/products/11189) as long as the sockets and plugs match. 
 Ultimately, it doesn't matter how this is wired as long as (most likely case), DCE goes to the PC and DTE goes to the device (see https://components101.com/connectors/rs232-connector).
@@ -64,7 +70,9 @@ You can use [Zadig](https://zadig.akeo.ie/) to install a generic libusb driver f
 Other than that, everything needed to compile Y-Pipe should be already installed and compilation and upload (via the Bootloader) can be done in the Arduino IDE.
 
 # Usage
-Console mode is entered by pressing ENTER. This stops the logging of traffic from the controllers and device until console mode is exited by typing 'x'.
+At any time, comments can be typed in the console window. These can be used to describe *in plain text* what the command issued was, causing the serial instructions that follow. There is a length limit before the comment simply continues to the next line. Also, if some serial traffic occurs while typing a comment, the comment will be truncated gracefully.
+
+The *interactive* onsole mode is entered by pressing ENTER on an empty line. This stops the logging of traffic from the controllers and device, until console mode is exited by typing 'x'.
 
 Two things can be changed and saved in the Y-Pipe EEPROM memory:
 * 'b' on its own in a terminal window displays the current baud rate between controller and device. b+BAUDRATE (e.g. 'b115200') changes the current baud rate.

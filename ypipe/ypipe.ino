@@ -18,7 +18,10 @@
 #include <EEPROM.h>
 #include <USBComposite.h>
 
+//Maple Mini
 #define BOARD_LED_PIN PB1
+//Blue pill
+//#define BOARD_LED_PIN PC13
 
 // That's a large number! Serial strings shouldn't really be that long.
 #define MAXLENGTH 50
@@ -32,7 +35,7 @@ USBMultiSerial<3> ms;
 const uint32_t baudRates[] PROGMEM = {9600, 19200, 38400, 57600, 115200};
 const char delimMsg[] PROGMEM = "delim set to \\";
 const char baudMsg[] PROGMEM = "Baud rate between RS232 devices set to ";
-const char welcomeMsg[] PROGMEM = "C> This is the console. Type H for help, X to exit";
+const char welcomeMsg[] PROGMEM = "C> Interactive console mode\r\nC> Logging is now disabled\r\nC> Type H for help, X to exit";
 const char helpMsg[] PROGMEM = "Use W to locate all four consoles\r\n" \
     "C> d for delimiter (dr for \\r, dn for \\n, drn for \\r\\n\\r\\n)\r\n" \
     "C> b for baudrate (b9600, b19200, b38400, b57600,  b115200)";
@@ -51,7 +54,11 @@ uint32_t elapsed_t1;
 uint32_t elapsed_t2;
 uint32_t baud_rate;
 
-bool isConsoled = false;
+//Console mode entered by pressing ENTER on an empty line
+bool isConsole = false;
+
+//Comment mode is when starting typing, will change after timeout or when ENTER was pressed
+bool isTyping = false;
 
 // Delimiter is at EEPROM address 0
 //    '\n' or '0x0A' (10 in decimal) -> This character is called "Line Feed" (LF).
@@ -120,17 +127,27 @@ void loop() {
         bool isError = false;
         
         if (s == '\n' || s == '\r') {
+            isTyping = false;
+
+            //This is just a comment, just go to the next line when you press enter...
+            if (!isConsole && tl > 0) {
+                ms.ports[2].write("\r\n");
+                rxMsgC = "";
+                continue;
+            }
+
+            //But if ENTER was pressed on an empty line, we go to console mode...
             if (tl == 0) {
-                if (!isConsoled) {
-                    isConsoled = true;
+                if (!isConsole) {
+                    isConsole = true;
                     ms.ports[2].print(welcomeMsg);
                 }
             }
-            if (isConsoled) ms.ports[2].write("\r\nC> ");
+            if (isConsole) ms.ports[2].write("\r\nC> ");
 
             if (rxMsgC=="x" || rxMsgC == "X")  { 
                 ms.ports[2].write("bye\r\n");
-                isConsoled = false;
+                isConsole = false;
             } else if (rxMsgC=="H")  { 
                 // The help message
                 ms.ports[2].println(helpMsg);
@@ -199,12 +216,17 @@ void loop() {
             // A command was issued. Clear the input buffer
             if (tl > 0) {
                 rxMsgC = "";
-                if (isConsoled) ms.ports[2].write("C> ");
+                if (isConsole) ms.ports[2].write("C> ");
             }
 
         } else {  
-            if (!isConsoled)
-                continue;
+            //Here we have a chance to display a comment but we don't have a prompt
+            if (!isConsole && !isTyping && tl == 0) {
+                isTyping = true;
+                ms.ports[2].print("C> ");
+            }
+
+            //if (!isConsole) continue;
 
             bool isDisplay = true;
 
@@ -215,9 +237,12 @@ void loop() {
                 else
                     isDisplay = false;
             } else {
-                if (tl > MAXLENGTH) {
+                //Here we've reached the end of the line, so we make a new one
+                if (tl >= MAXLENGTH) {
                     rxMsgC = "";
-                    ms.ports[2].print("\r\nC> Huh?\n\rC> ");
+                    ms.ports[2].print("\r\nC> ");
+                    if (isConsole)
+                        ms.ports[2].print("Huh?\n\rC> ");
                 }
                 rxMsgC += s; 
             }
@@ -239,7 +264,14 @@ void loop() {
             Serial2.print(rxMsgA + delim);
 
             // Quiet if in console mode
-            if (!isConsoled) {
+            if (!isConsole) {
+                //Here we were typing something so cut it short!
+                if (isTyping) {
+                    isTyping = false;
+                    rxMsgC = "";
+                    ms.ports[2].print("\r\n");
+                }
+
                 ms.ports[2].write("U> ");
                 ms.ports[2].println(rxMsgA);
             }
@@ -266,7 +298,14 @@ void loop() {
             Serial2.print(rxMsgB + delim);
 
             // Quiet if in console mode
-            if (!isConsoled) {
+            if (!isConsole) {
+                //Here we were typing something so cut it short!
+                if (isTyping) {
+                    isTyping = false;
+                    rxMsgC = "";
+                    ms.ports[2].print("\r\n");
+                }
+
                 ms.ports[2].write("u> ");
                 ms.ports[2].println(rxMsgB);
             }
@@ -296,7 +335,14 @@ void loop() {
             Serial2.print(rxMsg1 + delim);
 
             // Quiet if in console mode
-            if (!isConsoled) {
+            if (!isConsole) {
+                //Here we were typing something so cut it short!
+                if (isTyping) {
+                    isTyping = false;
+                    rxMsgC = "";
+                    ms.ports[2].print("\r\n");
+                }
+
                 ms.ports[2].write("S> ");
                 ms.ports[2].println(rxMsg1);
             }
@@ -329,7 +375,14 @@ void loop() {
             Serial1.print(rxMsg2 + delim);
 
             // Quiet if in console mode
-            if (!isConsoled) {
+            if (!isConsole) {
+                //Here we were typing something so cut it short!
+                if (isTyping) {
+                    isTyping = false;
+                    rxMsgC = "";
+                    ms.ports[2].print("\r\n");
+                }
+
                 ms.ports[2].write("D> ");
                 ms.ports[2].println(rxMsg2);
             }
@@ -357,8 +410,15 @@ void loop() {
     if (now - elapsed_tC >= SERIAL_TIMEOUT) {
         // Here we decide we waited long enough and clear the string.
         // We're telling the user
-        if (rxMsgC.length() > 0)
-            ms.ports[2].print("\r\nC> Huh?\n\rC> ");
+        if (rxMsgC.length() > 0) {
+            if (isConsole)
+                ms.ports[2].print("\r\nC> Huh?\n\rC> ");
+            else {
+                isTyping = false;
+                ms.ports[2].print("\r\n");
+            }
+        }
+
         rxMsgC = ""; elapsed_tC = now;
     }
 
