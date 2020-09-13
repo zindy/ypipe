@@ -37,7 +37,7 @@ const char delimMsg[] PROGMEM = "delim set to \\";
 const char baudMsg[] PROGMEM = "Baud rate between RS232 devices set to ";
 const char welcomeMsg[] PROGMEM = "C> Interactive console mode\r\nC> Logging is now disabled\r\nC> Type H for help, X to exit";
 const char helpMsg[] PROGMEM = "Use W to locate all four consoles\r\n" \
-    "C> d for delimiter (dr for \\r, dn for \\n, drn for \\r\\n\\r\\n)\r\n" \
+    "C> d for delimiter (dr for \\r, dn for \\n, drn for \\r\\n, dnr for \\n\\r)\r\n" \
     "C> b for baudrate (b9600, b19200, b38400, b57600,  b115200)";
 
 // These are used for parsing the serial input (A B and C are USB, 1 and 2 are RS232).
@@ -60,6 +60,9 @@ bool isConsole = false;
 //Comment mode is when starting typing, will change after timeout or when ENTER was pressed
 bool isTyping = false;
 
+//isFaked when faking a response.
+bool isFaked = false;
+
 // Delimiter is at EEPROM address 0
 //    '\n' or '0x0A' (10 in decimal) -> This character is called "Line Feed" (LF).
 //    '\r' or '0x0D' (13 in decimal) -> This one is called "Carriage return" (CR).
@@ -78,6 +81,9 @@ void printDelim(uint8_t index) {
             break;
         case 2:
             ms.ports[2].println("r\\n");
+            break;
+        case 3:
+            ms.ports[2].println("n\\r");
             break;
         default:
             ms.ports[2].println("r");
@@ -100,6 +106,9 @@ void setup() {
         case 2:
             delim = "\r\n";
             break;
+        case 3:
+            delim = "\n\r";
+            break;
         default:
             delim = "\r";
             delim_index = 0;
@@ -113,6 +122,69 @@ void setup() {
     baud_rate = baudRates[ee_index];
     Serial1.begin(baud_rate); Serial2.begin(baud_rate);
 }
+
+//Fake a response from a Hamilton MVP device (global var rxMsg2 for a command)
+void fakeResponse(String rxMsg) {
+/*
+   //Uncomment this to fake a Hamilton MVP device compatible with the HamiltonMVP device adapter
+    static uint8_t valvePos=0;
+
+    isFaked = true;
+    if (rxMsg == "1a" || rxMsg.substring(1,4) == "LXP") {
+        //Do nothing, we're good?
+        rxMsg2 = "";
+    } else if (rxMsg.charAt(1) == 'F') {
+        rxMsg2 = "Y";
+    } else if (rxMsg.charAt(1) == 'U') {
+        //send the firmware
+        rxMsg2 = "M01.02.03";
+    } else if (rxMsg.substring(1,3) == "E2") {
+        //Query E2 to clear errors
+        rxMsg2 = "\x50\x40\x50\x50";
+    } else if (rxMsg.substring(1,4) == "LQT") {
+        //Query the valve type (8 port distribution)
+        rxMsg2 = "2";
+    } else if (rxMsg.substring(1,4) == "LQP") {
+        //Query the valve position
+        rxMsg2 = "0"+String(valvePos+1);
+    } else if (rxMsg.substring(1,4) == "LQA") {
+        //Query the valve angle
+        rxMsg2 = "000";
+    } else if (rxMsg.substring(1,4) == "LQF") {
+        //Query Valve Speed Request/Response
+        rxMsg2 = "0";
+    } else if (rxMsg.substring(1,3) == "LP") {
+        valvePos = rxMsg.substring(4,5).toInt()-1;
+        if (valvePos < 0) valvePos = 0;
+        else if (valvePos > 7) valvePos = 7;
+        rxMsg2 = "";
+    } else {
+        isFaked = false;
+    }
+
+    // The first response should be an exact echo
+    // The second response ACK or NAK; ACK may also be followed by query
+    if (isFaked) {
+        rxMsg2 = rxMsg+delim+"\x06"+rxMsg2;
+    }
+*/
+}
+
+String escapeString(String rxMsg) {
+    String retString = "";
+    for (uint8_t i=0; i<rxMsg.length(); i++) {
+        char c = rxMsg.charAt(i);
+        if (c >=32 && c<128)
+            retString+=c;
+        else {
+            retString += "\\x";
+            if (c < 16) retString += "0";
+            retString += String(c, HEX);
+        }
+    }
+    return retString;
+}
+
 
 void loop() {
     char s;
@@ -195,6 +267,10 @@ void loop() {
                         // delim change
                         delim = "\r\n";
                         index = 2;
+                    } else if (rxMsgC=="dnr") {
+                        // delim change
+                        delim = "\n\r";
+                        index = 3;
                     } else
                         isError = true;
                 }
@@ -242,7 +318,7 @@ void loop() {
                     rxMsgC = "";
                     ms.ports[2].print("\r\nC> ");
                     if (isConsole)
-                        ms.ports[2].print("Huh?\n\rC> ");
+                        ms.ports[2].print("Huh?\r\nC> ");
                 }
                 rxMsgC += s; 
             }
@@ -273,7 +349,10 @@ void loop() {
                 }
 
                 ms.ports[2].write("U> ");
-                ms.ports[2].println(rxMsgA);
+                ms.ports[2].println(escapeString(rxMsgA));
+
+                //These will fake a response from the device
+                fakeResponse(rxMsgA);
             }
 
             // Clear the input buffer
@@ -307,7 +386,10 @@ void loop() {
                 }
 
                 ms.ports[2].write("u> ");
-                ms.ports[2].println(rxMsgB);
+                ms.ports[2].println(escapeString(rxMsgB));
+
+                //These will fake a response from the device
+                fakeResponse(rxMsgB);
             }
 
             // Clear the input buffer
@@ -344,7 +426,10 @@ void loop() {
                 }
 
                 ms.ports[2].write("S> ");
-                ms.ports[2].println(rxMsg1);
+                ms.ports[2].println(escapeString(rxMsg1));
+
+                //These will fake a response from the device
+                fakeResponse(rxMsg1);
             }
 
             // Clear the input buffer
@@ -356,9 +441,12 @@ void loop() {
     }
 
     // Serial device to both controllers
-    while (Serial2.available() > 0) {
+    while (Serial2.available() > 0  || isFaked) {
         elapsed_t2 = now;
-        s=(char)Serial2.read();
+
+        //For a fake response, we fake the incoming serial2 character. rxMsg2 itself is already faked
+        s = (isFaked)?'\n':(char)Serial2.read();
+
         uint8_t tl = rxMsg2.length();
 
         if (s == '\n' || s == '\r') {
@@ -370,6 +458,9 @@ void loop() {
 
             // Goes to USB controller...
             ms.ports[0].print(rxMsg2 + delim);
+
+            // Goes to second USB controller...
+            ms.ports[1].print(rxMsg2 + delim);
 
             // Goes to serial controller...
             Serial1.print(rxMsg2 + delim);
@@ -383,12 +474,15 @@ void loop() {
                     ms.ports[2].print("\r\n");
                 }
 
+                //Debug info
+                //if (isFaked) ms.ports[2].println("C> Faking:");
                 ms.ports[2].write("D> ");
-                ms.ports[2].println(rxMsg2);
+                ms.ports[2].println(escapeString(rxMsg2));
             }
 
             // Clear the input buffer
             rxMsg2 = "";
+            isFaked = false;
         } else {  
             // Add the character or clear the string if too long
             rxMsg2 = (tl < MAXLENGTH) ? rxMsg2+s : "";
@@ -412,7 +506,7 @@ void loop() {
         // We're telling the user
         if (rxMsgC.length() > 0) {
             if (isConsole)
-                ms.ports[2].print("\r\nC> Huh?\n\rC> ");
+                ms.ports[2].print("\r\nC> Huh?\r\nC> ");
             else {
                 isTyping = false;
                 ms.ports[2].print("\r\n");
@@ -425,4 +519,3 @@ void loop() {
     // Wait some
     delay(50);
 }
-
