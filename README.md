@@ -44,6 +44,9 @@ This is useful when either the original controller or the device sends strings w
 Another use is when the controller was designed with a different device from the one you have and maybe changing the identification string sent back by the device unlocks
 the controller software.
 
+## Faking a device
+The commented code in fakeResponse(String rxMsg) is there to completely fake a Hamilton MVP device which will register with Micro-Manager's HamiltonMVP device adapter. rxMsg comes from either USB1, USB2 or the serial controller. In the fakeResponse() function, the response is stored in the global variable rxMsg2 String, and by setting the global flag isFaked to true, the Y-Pipe then behaves as if it got a message from the Serial Device. This is super handy to quickly simulate a device you may not have access to.
+
 ## Comparing the original software traffic to that of an alternative stack
 Through the Y-Pipe and **using a lot of caution**, it is possible to control the device using two software stacks simultaneously and compare the responses sent back by the device. Original, Substitute and Device traffic is labelled as such through the logging port.
 
