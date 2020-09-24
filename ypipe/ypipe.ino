@@ -18,10 +18,10 @@
 #include <EEPROM.h>
 #include <USBComposite.h>
 
-//Maple Mini
-#define BOARD_LED_PIN PB1
-//Blue pill
-//#define BOARD_LED_PIN PC13
+// Maple Mini
+//#define BOARD_LED_PIN PB1
+// Blue pill
+#define BOARD_LED_PIN PC13
 
 // That's a large number! Serial strings shouldn't really be that long.
 #define MAXLENGTH 50
@@ -33,9 +33,9 @@ USBMultiSerial<3> ms;
 
 // Some strings we'll be using for display stuff. These are stored in PROGMEM
 const uint32_t baudRates[] PROGMEM = {9600, 19200, 38400, 57600, 115200};
-const char delimMsg[] PROGMEM = "delim set to \\";
+const char delimMsg[] PROGMEM = "delim set to ";
 const char baudMsg[] PROGMEM = "Baud rate between RS232 devices set to ";
-const char welcomeMsg[] PROGMEM = "C> Interactive console mode\r\nC> Logging is now disabled\r\nC> Type H for help, X to exit";
+const char welcomeMsg[] PROGMEM = "C> Interactive console mode\r\nC> Logging is now disabled\r\nC> Type H for help, [ENTER] to exit";
 const char helpMsg[] PROGMEM = "Use W to locate all four consoles\r\n" \
     "C> d for delimiter (dr for \\r, dn for \\n, drn for \\r\\n, dnr for \\n\\r)\r\n" \
     "C> b for baudrate (b9600, b19200, b38400, b57600,  b115200)";
@@ -54,10 +54,10 @@ uint32_t elapsed_t1;
 uint32_t elapsed_t2;
 uint32_t baud_rate;
 
-//Console mode entered by pressing ENTER on an empty line
+// Console mode entered by pressing ENTER on an empty line
 bool isConsole = false;
 
-//Comment mode is when starting typing, will change after timeout or when ENTER was pressed
+// Comment mode is when starting typing, will change after timeout or when ENTER was pressed
 bool isTyping = false;
 
 //isFaked when faking a response.
@@ -68,62 +68,73 @@ bool isFaked = false;
 //    '\r' or '0x0D' (13 in decimal) -> This one is called "Carriage return" (CR).
 //     0 is '\r' 1 is '\n' 2 is '\r\n'
 
-uint8_t delim_index = 0;
-
 // This is not a char to account for \r\n
 String delim = "\r";
 
-void printDelim(uint8_t index) {
-    ms.ports[2].print(delimMsg);
-    switch(index) {
-        case 1:
-            ms.ports[2].println("n");
+// https://circuits4you.com/2018/10/16/arduino-reading-and-writing-string-to-eeprom/
+// Store are retrieve strings from the EEPROM
+void writeString(uint8_t add,String data)
+{
+  uint8_t _size = data.length();
+
+  for(uint8_t i=0; i<_size; i++) {
+      EEPROM.write(add+i,data[i]);
+  }
+  EEPROM.write(add+_size,'\0');   //Add termination null character for String Data
+}
+ 
+String readString(uint8_t add)
+{
+    String temp = "";
+    for (uint8_t i=0; i< 10; i++) {
+        char k = (char)EEPROM.read(add+i);
+        if (k == 0)
             break;
-        case 2:
-            ms.ports[2].println("r\\n");
-            break;
-        case 3:
-            ms.ports[2].println("n\\r");
-            break;
-        default:
-            ms.ports[2].println("r");
+        temp += k;
     }
+    return temp;
 }
 
-void setup() {
-    // initialize the digital pin as an output:
-    pinMode(BOARD_LED_PIN, OUTPUT);
-
-    ms.begin();
-    while (!USBComposite);
-
-    // initialising the delimiter
-    delim_index = EEPROM.read(1);
-    switch(delim_index) {
-        case 1:
-            delim = "\n";
+// https://forum.arduino.cc/index.php?topic=123486.0
+// Used to convert a string to a hex number
+int x2i(String s) {
+    int x = 0;
+    for (uint8_t i=0; i < s.length(); i++) {
+        char c = s[i];
+        if (c >= '0' && c <= '9') {
+            x *= 16;
+            x += c - '0';
+        }
+        else if (c >= 'A' && c <= 'F') {
+            x *= 16;
+            x += (c - 'A') + 10;
+        }
+        else if (c >= 'a' && c <= 'f') {
+            x *= 16;
+            x += (c - 'a') + 10;
+        }
+        else
             break;
-        case 2:
-            delim = "\r\n";
-            break;
-        case 3:
-            delim = "\n\r";
-            break;
-        default:
-            delim = "\r";
-            delim_index = 0;
     }
-    printDelim(delim_index);
-
-    // initialise the baudrate
-    uint8_t ee_index = EEPROM.read(0);
-    if (ee_index > 4) ee_index = 4;
-
-    baud_rate = baudRates[ee_index];
-    Serial1.begin(baud_rate); Serial2.begin(baud_rate);
+    return x;
 }
 
-//Fake a response from a Hamilton MVP device (global var rxMsg2 for a command)
+String escapeString(String rxMsg) {
+    String retString = "";
+    for (uint8_t i=0; i<rxMsg.length(); i++) {
+        char c = rxMsg.charAt(i);
+        if (c >=32 && c<128)
+            retString+=c;
+        else {
+            retString += "\\x";
+            if (c < 16) retString += "0";
+            retString += String(c, HEX);
+        }
+    }
+    return retString;
+}
+
+// Fake a response from a Hamilton MVP device (global var rxMsg2 for a command)
 void fakeResponse(String rxMsg) {
 /*
    //Uncomment this to fake a Hamilton MVP device compatible with the HamiltonMVP device adapter
@@ -170,21 +181,26 @@ void fakeResponse(String rxMsg) {
 */
 }
 
-String escapeString(String rxMsg) {
-    String retString = "";
-    for (uint8_t i=0; i<rxMsg.length(); i++) {
-        char c = rxMsg.charAt(i);
-        if (c >=32 && c<128)
-            retString+=c;
-        else {
-            retString += "\\x";
-            if (c < 16) retString += "0";
-            retString += String(c, HEX);
-        }
-    }
-    return retString;
-}
 
+void setup() {
+    // initialize the digital pin as an output:
+    pinMode(BOARD_LED_PIN, OUTPUT);
+
+    ms.begin();
+    while (!USBComposite);
+
+    // initialising the delimiter
+    delim = readString(1);
+    if (delim.length() == 0)
+        delim = "\r";
+
+    // initialise the baudrate
+    uint8_t ee_index = EEPROM.read(0);
+    if (ee_index > 4) ee_index = 4;
+
+    baud_rate = baudRates[ee_index];
+    Serial1.begin(baud_rate); Serial2.begin(baud_rate);
+}
 
 void loop() {
     char s;
@@ -201,26 +217,26 @@ void loop() {
         if (s == '\n' || s == '\r') {
             isTyping = false;
 
-            //This is just a comment, just go to the next line when you press enter...
+            // This is just a comment, just go to the next line when you press enter...
             if (!isConsole && tl > 0) {
                 ms.ports[2].write("\r\n");
                 rxMsgC = "";
                 continue;
             }
 
-            //But if ENTER was pressed on an empty line, we go to console mode...
+            // But if ENTER was pressed on an empty line, we go to console mode...
             if (tl == 0) {
                 if (!isConsole) {
                     isConsole = true;
                     ms.ports[2].print(welcomeMsg);
+                } else {
+                    isConsole = false;
+                    ms.ports[2].write("bye\r\n");
                 }
             }
             if (isConsole) ms.ports[2].write("\r\nC> ");
 
-            if (rxMsgC=="x" || rxMsgC == "X")  { 
-                ms.ports[2].write("bye\r\n");
-                isConsole = false;
-            } else if (rxMsgC=="H")  { 
+            if (rxMsgC=="H")  { 
                 // The help message
                 ms.ports[2].println(helpMsg);
             } else if (rxMsgC=="W") {
@@ -253,34 +269,48 @@ void loop() {
                     ms.ports[2].println(baud_rate);
                 }
             } else if (rxMsgC.startsWith("d")) {
-                uint8_t index = delim_index;
                 if (tl > 1) {
+                    String delim_temp;
                     if (rxMsgC=="dr") {
                         // delim change
-                        delim = "\r";
-                        index = 0;
+                        delim_temp = "\r";
                     } else if (rxMsgC=="dn") {
                         // delim change
-                        delim = "\n";
-                        index = 1;
+                        delim_temp = "\n";
                     } else if (rxMsgC=="drn") {
                         // delim change
-                        delim = "\r\n";
-                        index = 2;
+                        delim_temp = "\r\n";
                     } else if (rxMsgC=="dnr") {
                         // delim change
-                        delim = "\n\r";
-                        index = 3;
-                    } else
-                        isError = true;
-                }
-                if (!isError) {
-                    printDelim(index);
-                    if (index != delim_index) {
-                        delim_index = index;
-                        EEPROM.update(1, delim_index);
+                        delim_temp = "\n\r";
+                    } else {
+                        // Exotic delimiters (max 10 characters stored in the EEPROM) are handled here. They are appended to commands sent to the device.
+                        // However, for commands returned by the device, only the first character is checked.
+                        
+                        delim_temp = rxMsgC.substring(1);
+
+                        uint32_t s_from=0;
+                        while (1) {
+                            s_from = delim_temp.indexOf("\\x",s_from);
+                            if (s_from == -1)
+                                break;
+
+                            char c = (char)(x2i(delim_temp.substring(s_from+2,s_from+4)));
+                            delim_temp = delim_temp.substring(0,s_from)+c+delim_temp.substring(s_from+4);
+                            s_from += 4;
+                            if (s_from >= delim_temp.length())
+                                break;
+                        }
+                    }
+                    if (delim_temp != delim) {
+                        delim = delim_temp;
+                        writeString(1,delim);
                     }
                 }
+
+                //Display the escaped delimiter:
+                ms.ports[2].print(delimMsg);
+                ms.ports[2].println(escapeString(delim));
             } else {
                 // An error only if we didn't press ENTER
                 if (tl > 0) isError = true;
@@ -296,7 +326,7 @@ void loop() {
             }
 
         } else {  
-            //Here we have a chance to display a comment but we don't have a prompt
+            // Here we have a chance to display a comment but we don't have a prompt
             if (!isConsole && !isTyping && tl == 0) {
                 isTyping = true;
                 ms.ports[2].print("C> ");
@@ -313,7 +343,7 @@ void loop() {
                 else
                     isDisplay = false;
             } else {
-                //Here we've reached the end of the line, so we make a new one
+                // Here we've reached the end of the line, so we make a new one
                 if (tl >= MAXLENGTH) {
                     rxMsgC = "";
                     ms.ports[2].print("\r\nC> ");
@@ -332,7 +362,7 @@ void loop() {
         s=(char)ms.ports[0].read();
         uint8_t tl = rxMsgA.length();
 
-        if (s == '\n' || s == '\r') {
+        if (s == '\n' || s == '\r' || s == delim[0]) {
             if (tl == 0)
                 continue;
 
@@ -341,7 +371,7 @@ void loop() {
 
             // Quiet if in console mode
             if (!isConsole) {
-                //Here we were typing something so cut it short!
+                // Here we were typing something so cut it short!
                 if (isTyping) {
                     isTyping = false;
                     rxMsgC = "";
@@ -351,7 +381,7 @@ void loop() {
                 ms.ports[2].write("U> ");
                 ms.ports[2].println(escapeString(rxMsgA));
 
-                //These will fake a response from the device
+                // These will fake a response from the device
                 fakeResponse(rxMsgA);
             }
 
@@ -369,7 +399,7 @@ void loop() {
         s=(char)ms.ports[1].read();
         uint8_t tl = rxMsgB.length();
 
-        if (s == '\n' || s == '\r') {
+        if (s == '\n' || s == '\r' || s == delim[0]) {
             if (tl == 0)
                 continue;
 
@@ -378,7 +408,7 @@ void loop() {
 
             // Quiet if in console mode
             if (!isConsole) {
-                //Here we were typing something so cut it short!
+                // Here we were typing something so cut it short!
                 if (isTyping) {
                     isTyping = false;
                     rxMsgC = "";
@@ -388,7 +418,7 @@ void loop() {
                 ms.ports[2].write("u> ");
                 ms.ports[2].println(escapeString(rxMsgB));
 
-                //These will fake a response from the device
+                // These will fake a response from the device
                 fakeResponse(rxMsgB);
             }
 
@@ -406,7 +436,7 @@ void loop() {
         s=(char)Serial1.read();
         uint8_t tl = rxMsg1.length();
 
-        if (s == '\n' || s == '\r') {
+        if (s == '\n' || s == '\r' || s == delim[0]) {
             if (rxMsg1.length() == 0)
                 continue;
 
@@ -418,7 +448,7 @@ void loop() {
 
             // Quiet if in console mode
             if (!isConsole) {
-                //Here we were typing something so cut it short!
+                // Here we were typing something so cut it short!
                 if (isTyping) {
                     isTyping = false;
                     rxMsgC = "";
@@ -428,7 +458,7 @@ void loop() {
                 ms.ports[2].write("S> ");
                 ms.ports[2].println(escapeString(rxMsg1));
 
-                //These will fake a response from the device
+                // These will fake a response from the device
                 fakeResponse(rxMsg1);
             }
 
@@ -444,41 +474,56 @@ void loop() {
     while (Serial2.available() > 0  || isFaked) {
         elapsed_t2 = now;
 
-        //For a fake response, we fake the incoming serial2 character. rxMsg2 itself is already faked
+        // For a fake response, we fake the incoming serial2 character. rxMsg2 itself is already faked
         s = (isFaked)?'\n':(char)Serial2.read();
 
         uint8_t tl = rxMsg2.length();
 
-        if (s == '\n' || s == '\r') {
+        if (s == '\n' || s == '\r' || s == delim[0]) {
             if (rxMsg2.length() == 0)
                 continue;
 
             // XXX Replace the following substring in the reply
             // rxMsg2.replace("BD_EP","AAAS");
 
-            // Goes to USB controller...
-            ms.ports[0].print(rxMsg2 + delim);
+            // Here (if we have to) we process a large faked string in delimited chunks 
+            uint32_t s_from=0, s_to;
+            while (1) {
+                s_to = rxMsg2.indexOf(delim,s_from);
+                if (s_to == -1)
+                    s_to = tl;
 
-            // Goes to second USB controller...
-            ms.ports[1].print(rxMsg2 + delim);
+                // Goes to USB controller...
+                ms.ports[0].print(rxMsg2.substring(s_from,s_to) + delim);
 
-            // Goes to serial controller...
-            Serial1.print(rxMsg2 + delim);
+                // Goes to second USB controller...
+                ms.ports[1].print(rxMsg2.substring(s_from,s_to) + delim);
 
-            // Quiet if in console mode
-            if (!isConsole) {
-                //Here we were typing something so cut it short!
-                if (isTyping) {
-                    isTyping = false;
-                    rxMsgC = "";
-                    ms.ports[2].print("\r\n");
+                // Goes to serial controller...
+                Serial1.print(rxMsg2.substring(s_from,s_to) + delim);
+
+                // Quiet if in console mode
+                if (!isConsole) {
+                    // Here we were typing something so cut it short!
+                    if (isTyping) {
+                        isTyping = false;
+                        rxMsgC = "";
+                        ms.ports[2].print("\r\n");
+                    }
+
+                    // Debug info
+                    //if (isFaked) ms.ports[2].println("C> Faking:");
+                    ms.ports[2].write("D> ");
+                    ms.ports[2].println(escapeString(rxMsg2.substring(s_from,s_to)));
                 }
 
-                //Debug info
-                //if (isFaked) ms.ports[2].println("C> Faking:");
-                ms.ports[2].write("D> ");
-                ms.ports[2].println(escapeString(rxMsg2));
+                // We got to the end of the string, nothing more to send
+                if (s_to >= tl)
+                    break;
+
+                s_from = s_to + delim.length();
             }
+
 
             // Clear the input buffer
             rxMsg2 = "";
