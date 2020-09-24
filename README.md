@@ -80,10 +80,10 @@ The *interactive* onsole mode is entered by pressing ENTER on an empty line. Thi
 Two things can be changed and saved in the Y-Pipe EEPROM memory:
 * 'b' on its own in a terminal window displays the current baud rate between controller and device. b+BAUDRATE (e.g. 'b115200') changes the current baud rate.
 Valid options are 9600, 19200, 38400, 57600 and 115200.
-*  'd' on its own displays the current delimiter value: '\\r', '\\n', '\\r\\n'. To change the delimiter, issue 'dr', 'dn' or 'drn'.
+*  'd' on its own displays the current delimiter value: '\\r', '\\n', '\\r\\n'. To change the delimiter, issue 'dr', 'dn' or 'drn'. You can also type a completely random delim string. For example, to monitor the Lumencor Spectra traffic, you will want to issue the command **d\x50** which will set the delimiter to the ASCII character 0x50 (hex).
 
 Additional commands are:
 * 'H' for help
 * 'W' for who am I? which displays each role on the corresponding terminal window (if connected)
-* 'x' to exit the console mode.
+* Simply press \[ENTER\] to return to logging mode.
 
