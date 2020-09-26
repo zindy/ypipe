@@ -75,7 +75,7 @@ Other than that, everything needed to compile Y-Pipe should be already installed
 # Usage
 At any time, comments can be typed in the console window. These can be used to describe *in plain text* what the command issued was, causing the serial instructions that follow. There is a length limit before the comment simply continues to the next line. Also, if some serial traffic occurs while typing a comment, the comment will be truncated gracefully.
 
-The *interactive* onsole mode is entered by pressing ENTER on an empty line. This stops the logging of traffic from the controllers and device, until console mode is exited by typing 'x'.
+The *interactive* console mode is entered by pressing ENTER on an empty line. This stops the logging of traffic from the controllers and device, until console mode is exited by typing 'x'.
 
 Two things can be changed and saved in the Y-Pipe EEPROM memory:
 * 'b' on its own in a terminal window displays the current baud rate between controller and device. b+BAUDRATE (e.g. 'b115200') changes the current baud rate.
@@ -87,3 +87,9 @@ Additional commands are:
 * 'W' for who am I? which displays each role on the corresponding terminal window (if connected)
 * Simply press \[ENTER\] to return to logging mode.
 
+# Limitations
+One thing I have not touched on about is the different modes we do the serial communication with. By default, I chose 8N1 (8 bit, no parity, 1 bit stop), however, this may not always be the case. And this is where we have a problem, as the STM32F103 has a limited number of modes, not including some of the older modes we may need, like 7E1 and 7O1 (7 bit, even or odd parity bit, 1 bit stop).
+
+Fortunately, *8N* can easily be converted to either *7E* or *7O* by computing the parity bit ourselves and replacing the Most Significant Bit with it. To convert 7E or 7O back to 8 bit, we simply "bitwise and" the string characters with 0b01111111 (127).
+
+This is something I've done to talk to an old Hamilton PSD/2 (which uses 7E1) with a Y-Pipe dongle.
