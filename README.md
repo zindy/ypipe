@@ -88,8 +88,12 @@ Additional commands are:
 * Simply press \[ENTER\] to return to logging mode.
 
 # Limitations
-One thing I have not touched on about is the different modes we do the serial communication with. By default, I chose 8N1 (8 bit, no parity, 1 bit stop), however, this may not always be the case. And this is where we have a problem, as the STM32F103 has a limited number of modes, not including some of the older modes we may need, like 7E1 and 7O1 (7 bit, even or odd parity bit, 1 bit stop).
+One thing I have not implemented in the Y-Pipe console is a group of commands to control the different serial communication modes. I hardcoded serial communications to follow 8N1 (8 bit, no parity, 1 bit stop) which will cover most of the cases. But, if the device connected to the Y-Pipe uses something else, a hardcoded value may not be the best option! We do not seem to have access to all the frame lengths (~~7 bit~~, 8 bit, 9 bit, correct me if I'm wrong) through Arduino commands, but "7 bit + parity" mode should be available on the STM32F103 as [described in the manual](https://www.st.com/resource/en/reference_manual/CD00171190-.pdf):
 
-Fortunately, *8N* can easily be converted to either *7E* or *7O* by computing the parity bit ourselves and replacing the Most Significant Bit with it. To convert 7E or 7O back to 8 bit, we simply "bitwise and" the string characters with 0b01111111 (127).
+    Parity control (generation of parity bit in transmission and parity checking in reception) can
+    be enabled by setting the PCE bit in the USART_CR1 register. Depending on the frame
+    length defined by the M bit, the possible USART frame formats are as listed in Table 195
 
-This is something I've done to talk to an old Hamilton PSD/2 (which uses 7E1) with a Y-Pipe dongle.
+Table 195 does list "7 bit + parity" by setting the M bit to 0 and the PCE bit to 1.
+
+For now I am testing a software solution as *8N* can easily be converted to either *7E* or *7O* by computing the parity bit ourselves and replacing the Most Significant Bit with it. To convert 7E or 7O back to 8 bit, we simply "bitwise and" the string characters with 0b01111111 (127). This is something I've had to do to talk to an old Hamilton PSD/2 (which uses 7E1), but a better solution to this problems should really be implemented.
