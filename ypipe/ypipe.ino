@@ -29,16 +29,30 @@
 // If it takes any device more than 5000s to construct a string, something went wrong
 #define SERIAL_TIMEOUT 5000
 
+// EZ Added from the STM32F103 datasheet https://www.st.com/resource/en/reference_manual/CD00171190-.pdf in table 195
+#define SERIAL_7E1	0B00000010
+#define SERIAL_7O1	0B00000011
+
 USBMultiSerial<3> ms;
 
 // Some strings we'll be using for display stuff. These are stored in PROGMEM
-const uint32_t baudRates[] PROGMEM = {9600, 19200, 38400, 57600, 115200};
+#define N_SERMODES 10
+const uint8_t serialModes[] PROGMEM = {SERIAL_8N1, SERIAL_8N2, SERIAL_9N1, SERIAL_9N2, SERIAL_8E1, SERIAL_8E2, SERIAL_8O1, SERIAL_8O2, SERIAL_7E1, SERIAL_7O1};
+const char *serialModeNames[] PROGMEM = {"8N1", "8N2", "9N1", "9N2", "8E1", "8E2", "8O1", "8O2", "7E1", "7O1"};
+uint8_t smIndex = 0;
+
+#define N_BAUDRATES 8
+const uint32_t baudRates[] PROGMEM = {1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200};
+uint8_t brIndex = 0;
+
 const char delimMsg[] PROGMEM = "delim set to ";
 const char baudMsg[] PROGMEM = "Baud rate between RS232 devices set to ";
+const char smMsg[] PROGMEM = "Serial mode set to ";
 const char welcomeMsg[] PROGMEM = "C> Interactive console mode\r\nC> Logging is now disabled\r\nC> Type H for help, [ENTER] to exit";
 const char helpMsg[] PROGMEM = "Use W to locate all four consoles\r\n" \
-    "C> d for delimiter (dr for \\r, dn for \\n, drn for \\r\\n, dnr for \\n\\r)\r\n" \
-    "C> b for baudrate (b9600, b19200, b38400, b57600,  b115200)";
+    "C> d for delimiter (\\r, \\n and \\xHH notation understood)\r\n" \
+    "C> b for baudrate (b? for a list of modes)\r\n" \
+    "C> m for serial mode (m? to display available modes)";
 
 // These are used for parsing the serial input (A B and C are USB, 1 and 2 are RS232).
 String rxMsgA = "";
@@ -52,7 +66,6 @@ uint32_t elapsed_tB;
 uint32_t elapsed_tC;
 uint32_t elapsed_t1;
 uint32_t elapsed_t2;
-uint32_t baud_rate;
 
 // Console mode entered by pressing ENTER on an empty line
 bool isConsole = false;
@@ -60,7 +73,7 @@ bool isConsole = false;
 // Comment mode is when starting typing, will change after timeout or when ENTER was pressed
 bool isTyping = false;
 
-//isFaked when faking a response.
+// isFaked when faking a response.
 bool isFaked = false;
 
 // Delimiter is at EEPROM address 0
@@ -134,6 +147,20 @@ String escapeString(String rxMsg) {
     return retString;
 }
 
+// Convert 7 to 8 by stripping the MSB (parity bit) but only if smIndex is for 7 bit mode
+String conv78(String rxMsg) {
+    if (smIndex == 8 || smIndex == 9) {
+        String retString = "";
+        for (uint8_t i=0; i<rxMsg.length(); i++) {
+            char c = rxMsg.charAt(i);
+            c = c & 127;
+            retString += c;
+        }
+        return retString;
+    } else
+        return rxMsg;
+}
+
 // Fake a response from a Hamilton MVP device (global var rxMsg2 for a command)
 void fakeResponse(String rxMsg) {
 /*
@@ -181,6 +208,34 @@ void fakeResponse(String rxMsg) {
 */
 }
 
+void printSerialModes(void) {
+    ms.ports[2].write("Serial modes are: ");
+    for (uint8_t i=0; i < N_SERMODES; i++) {
+        ms.ports[2].write(serialModeNames[i]);
+        ms.ports[2].write(" ");
+    }
+    ms.ports[2].write("\r\n");
+}
+
+void printBaudRates(void) {
+    ms.ports[2].write("Baudrates are: ");
+    for (uint8_t i=0; i < N_BAUDRATES; i++) {
+        ms.ports[2].print(baudRates[i]);
+        ms.ports[2].write(" ");
+    }
+    ms.ports[2].write("\r\n");
+}
+
+int8_t getSmIndex(String rxMsg) {
+    int8_t ret = -1;
+    for (int8_t i=0; i < N_SERMODES; i++) {
+        if (rxMsg == serialModeNames[i]) {
+            ret = i;
+            break;
+        }
+    }
+    return ret;
+}
 
 void setup() {
     // initialize the digital pin as an output:
@@ -189,17 +244,23 @@ void setup() {
     ms.begin();
     while (!USBComposite);
 
+    // initialise the baudrate
+    uint8_t ee_index = EEPROM.read(0);
+    if (ee_index >= N_BAUDRATES) ee_index = N_BAUDRATES-1;
+    brIndex = ee_index;
+
+    // initialise the baudrate
+    ee_index = EEPROM.read(1);
+    if (ee_index >= N_SERMODES) ee_index = 0;
+    smIndex = ee_index;
+
     // initialising the delimiter
-    delim = readString(1);
+    delim = readString(2);
     if (delim.length() == 0)
         delim = "\r";
 
-    // initialise the baudrate
-    uint8_t ee_index = EEPROM.read(0);
-    if (ee_index > 4) ee_index = 4;
-
-    baud_rate = baudRates[ee_index];
-    Serial1.begin(baud_rate); Serial2.begin(baud_rate);
+    Serial1.begin(baudRates[brIndex], serialModes[smIndex]);
+    Serial2.begin(baudRates[brIndex], serialModes[smIndex]);
 }
 
 void loop() {
@@ -228,7 +289,16 @@ void loop() {
             if (tl == 0) {
                 if (!isConsole) {
                     isConsole = true;
-                    ms.ports[2].print(welcomeMsg);
+                    ms.ports[2].println(welcomeMsg);
+                    ms.ports[2].print("C> ");
+                    ms.ports[2].print(baudMsg);
+                    ms.ports[2].println(baudRates[brIndex]);
+                    ms.ports[2].print("C> ");
+                    ms.ports[2].print(smMsg);
+                    ms.ports[2].println(serialModeNames[smIndex]);
+                    ms.ports[2].print("C> ");
+                    ms.ports[2].print(delimMsg);
+                    ms.ports[2].print(escapeString(delim));
                 } else {
                     isConsole = false;
                     ms.ports[2].write("bye\r\n");
@@ -246,65 +316,81 @@ void loop() {
                 ms.ports[2].println("CONSOLE");
                 Serial1.println("Ser1");
                 Serial2.println("Ser2");
+            } else if (rxMsgC.startsWith("m")) {
+                if (tl > 1) {
+                    if (rxMsgC.charAt(1) == '?') {
+                        printSerialModes();
+                        ms.ports[2].write("C> ");
+                    }
+                    else {
+                        int8_t i = getSmIndex(rxMsgC.substring(1));
+                        if (i == -1)
+                            isError = true;
+                        else if (i != smIndex) {
+                            smIndex = i;
+                            Serial1.begin(baudRates[brIndex], serialModes[smIndex]);
+                            Serial2.begin(baudRates[brIndex], serialModes[smIndex]);
+                            EEPROM.update(1, smIndex);
+                        }
+                    }
+                }
+                if (!isError) {
+                    ms.ports[2].print(smMsg);
+                    ms.ports[2].println(serialModeNames[smIndex]);
+                }
             } else if (rxMsgC.startsWith("b")) {
                 if (tl > 1) {
-                    uint32_t br = rxMsgC.substring(1).toInt();
-                    isError = true;
-                    for (uint8_t i=0; i<5; i++) {
-                        if (br == baudRates[i]) {
-                            isError = false;
-                            Serial1.begin(baud_rate);
-                            Serial2.begin(baud_rate);
-                            baud_rate = br;
+                    if (rxMsgC.charAt(1) == '?') {
+                        printBaudRates();
+                        ms.ports[2].write("C> ");
+                    }
+                    else {
+                        uint32_t br = rxMsgC.substring(1).toInt();
+                        isError = true;
+                        for (uint8_t i=0; i<N_BAUDRATES; i++) {
+                            if (br == baudRates[i]) {
+                                isError = false;
+                                if (i != brIndex) {
+                                    Serial1.begin(br, serialModes[smIndex]);
+                                    Serial2.begin(br, serialModes[smIndex]);
 
-                            // Here we write the baudrate index to the EEPROM
-                            EEPROM.update(0, i);
-
-                            break;
+                                    // Here we write the baudrate index to the EEPROM
+                                    brIndex = i;
+                                    EEPROM.update(0, brIndex);
+                                }
+                                break;
+                            }
                         }
                     }
                 }
                 if (!isError) {
                     ms.ports[2].print(baudMsg);
-                    ms.ports[2].println(baud_rate);
+                    ms.ports[2].println(baudRates[brIndex]);
                 }
             } else if (rxMsgC.startsWith("d")) {
                 if (tl > 1) {
-                    String delim_temp;
-                    if (rxMsgC=="dr") {
-                        // delim change
-                        delim_temp = "\r";
-                    } else if (rxMsgC=="dn") {
-                        // delim change
-                        delim_temp = "\n";
-                    } else if (rxMsgC=="drn") {
-                        // delim change
-                        delim_temp = "\r\n";
-                    } else if (rxMsgC=="dnr") {
-                        // delim change
-                        delim_temp = "\n\r";
-                    } else {
-                        // Exotic delimiters (max 10 characters stored in the EEPROM) are handled here. They are appended to commands sent to the device.
-                        // However, for commands returned by the device, only the first character is checked.
-                        
-                        delim_temp = rxMsgC.substring(1);
+                    // Exotic delimiters (max 10 characters stored in the EEPROM) are handled here. They are appended to commands sent to the device.
+                    // However, for commands returned by the device, only the first character is checked.
+                    String delim_temp = rxMsgC.substring(1);
+                    delim_temp.replace("\\n","\n");
+                    delim_temp.replace("\\r","\r");
 
-                        uint32_t s_from=0;
-                        while (1) {
-                            s_from = delim_temp.indexOf("\\x",s_from);
-                            if (s_from == -1)
-                                break;
+                    uint32_t s_from=0;
+                    while (1) {
+                        s_from = delim_temp.indexOf("\\x",s_from);
+                        if (s_from == -1)
+                            break;
 
-                            char c = (char)(x2i(delim_temp.substring(s_from+2,s_from+4)));
-                            delim_temp = delim_temp.substring(0,s_from)+c+delim_temp.substring(s_from+4);
-                            s_from += 4;
-                            if (s_from >= delim_temp.length())
-                                break;
-                        }
+                        char c = (char)(x2i(delim_temp.substring(s_from+2,s_from+4)));
+                        delim_temp = delim_temp.substring(0,s_from)+c+delim_temp.substring(s_from+4);
+                        s_from += 4;
+                        if (s_from >= delim_temp.length())
+                            break;
                     }
+
                     if (delim_temp != delim) {
                         delim = delim_temp;
-                        writeString(1,delim);
+                        writeString(2,delim);
                     }
                 }
 
@@ -331,8 +417,6 @@ void loop() {
                 isTyping = true;
                 ms.ports[2].print("C> ");
             }
-
-            //if (!isConsole) continue;
 
             bool isDisplay = true;
 
@@ -366,9 +450,6 @@ void loop() {
             if (tl == 0)
                 continue;
 
-            // Goes to device...
-            Serial2.print(rxMsgA + delim);
-
             // Quiet if in console mode
             if (!isConsole) {
                 // Here we were typing something so cut it short!
@@ -384,6 +465,9 @@ void loop() {
                 // These will fake a response from the device
                 fakeResponse(rxMsgA);
             }
+
+            // Goes to device...
+            Serial2.print(rxMsgA + delim);
 
             // Clear the input buffer
             rxMsgA = "";
@@ -403,9 +487,6 @@ void loop() {
             if (tl == 0)
                 continue;
 
-            // Goes to device...
-            Serial2.print(rxMsgB + delim);
-
             // Quiet if in console mode
             if (!isConsole) {
                 // Here we were typing something so cut it short!
@@ -421,6 +502,9 @@ void loop() {
                 // These will fake a response from the device
                 fakeResponse(rxMsgB);
             }
+
+            // Goes to device...
+            Serial2.print(rxMsgB + delim);
 
             // Clear the input buffer
             rxMsgB = "";
@@ -443,9 +527,6 @@ void loop() {
             // XXX Replace the following substring in the query
             // rxMsg1.replace("BD_EP","AAAS");
 
-            // Goes to device...
-            Serial2.print(rxMsg1 + delim);
-
             // Quiet if in console mode
             if (!isConsole) {
                 // Here we were typing something so cut it short!
@@ -456,11 +537,15 @@ void loop() {
                 }
 
                 ms.ports[2].write("S> ");
+                rxMsgA = conv78(rxMsgA);
                 ms.ports[2].println(escapeString(rxMsg1));
 
                 // These will fake a response from the device
                 fakeResponse(rxMsg1);
             }
+
+            // Goes to device...
+            Serial2.print(rxMsg1 + delim);
 
             // Clear the input buffer
             rxMsg1 = "";
@@ -485,6 +570,9 @@ void loop() {
 
             // XXX Replace the following substring in the reply
             // rxMsg2.replace("BD_EP","AAAS");
+
+            // XXX Here we strip the parity bit
+            rxMsg2 = conv78(rxMsg2);
 
             // Here (if we have to) we process a large faked string in delimited chunks 
             uint32_t s_from=0, s_to;

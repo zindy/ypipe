@@ -77,10 +77,10 @@ At any time, comments can be typed in the console window. These can be used to d
 
 The *interactive* console mode is entered by pressing ENTER on an empty line. This stops the logging of traffic from the controllers and device, until console mode is exited by typing 'x'.
 
-Two things can be changed and saved in the Y-Pipe EEPROM memory:
-* 'b' on its own in a terminal window displays the current baud rate between controller and device. b+BAUDRATE (e.g. 'b115200') changes the current baud rate.
-Valid options are 9600, 19200, 38400, 57600 and 115200.
-*  'd' on its own displays the current delimiter value: '\\r', '\\n', '\\r\\n'. To change the delimiter, issue 'dr', 'dn' or 'drn'. You can also type a completely random delim string. For example, to monitor the Lumencor Spectra traffic, you will want to issue the command **d\x50** which will set the delimiter to the ASCII character 0x50 (hex).
+A few things can be changed and saved in the Y-Pipe EEPROM memory:
+* 'b' typed on its own in the console displays the current baud rate between controller and device. b+BAUDRATE (e.g. 'b115200') changes the baud rate. Valid options are 1200, 2400, 4800, 9600, 19200, 38400, 57600 and 115200.
+* 'm' on its own shows the current serial mode (number of data bits, stop bits, parity odd/even/none), 'm?' shows the modes available, one of (for an STM32F103) 8N1 8N2 9N1 9N2 8E1 8E2 8O1 8O2 7E1 7O1
+* 'd' on its own displays the current delimiter value. d plus a delimiter string sets the delimiter. '\\r', '\\n' and '\\xHH' within the string are understood. **d\\r**, **d\\n** and **d\\r\\n** are probably the most useful, but to monitor the Lumencor Spectra traffic for example, you will want to issue the command **d\x50** which will set the delimiter to the ASCII character 0x50 (hex).
 
 Additional commands are:
 * 'H' for help
@@ -88,12 +88,4 @@ Additional commands are:
 * Simply press \[ENTER\] to return to logging mode.
 
 # Limitations
-One thing I have not implemented in the Y-Pipe console is a group of commands to control the different serial communication modes. I hardcoded serial communications to follow 8N1 (8 bit, no parity, 1 bit stop) which will cover most of the cases. But, if the device connected to the Y-Pipe uses something else, a hardcoded value may not be the best option! We do not seem to have access to all the frame lengths (~~7 bit~~, 8 bit, 9 bit, correct me if I'm wrong) through Arduino commands, but "7 bit + parity" mode should be available on the STM32F103 as [described in the manual](https://www.st.com/resource/en/reference_manual/CD00171190-.pdf):
-
-    Parity control (generation of parity bit in transmission and parity checking in reception) can
-    be enabled by setting the PCE bit in the USART_CR1 register. Depending on the frame
-    length defined by the M bit, the possible USART frame formats are as listed in Table 195
-
-Table 195 does list "7 bit + parity" by setting the M bit to 0 and the PCE bit to 1.
-
-For now I am testing a software solution as *8N* can easily be converted to either *7E* or *7O* by computing the parity bit ourselves and replacing the Most Significant Bit with it. To convert 7E or 7O back to 8 bit, we simply "bitwise and" the string characters with 0b01111111 (127). This is something I've had to do to talk to an old Hamilton PSD/2 (which uses 7E1), but a better solution to this problems should really be implemented.
+The 7 bit mode is a bit of a hack. Only ASCII values between 0 and 127 are transmitted to and from the device. I've only tested 8N1 and 7O1 for now. More testing required.
