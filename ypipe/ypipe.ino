@@ -76,12 +76,9 @@ bool isTyping = false;
 // isFaked when faking a response.
 bool isFaked = false;
 
-// Delimiter is at EEPROM address 0
+// Delimiter is at EEPROM address 2, stored as a string
 //    '\n' or '0x0A' (10 in decimal) -> This character is called "Line Feed" (LF).
 //    '\r' or '0x0D' (13 in decimal) -> This one is called "Carriage return" (CR).
-//     0 is '\r' 1 is '\n' 2 is '\r\n'
-
-// This is not a char to account for \r\n
 String delim = "\r";
 
 // https://circuits4you.com/2018/10/16/arduino-reading-and-writing-string-to-eeprom/
