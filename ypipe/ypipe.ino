@@ -52,7 +52,8 @@ const char welcomeMsg[] PROGMEM = "C> Interactive console mode\r\nC> Logging is 
 const char helpMsg[] PROGMEM = "Use W to locate all four consoles\r\n" \
     "C> d for delimiter (\\r, \\n and \\xHH notation understood)\r\n" \
     "C> b for baudrate (b? for a list of modes)\r\n" \
-    "C> m for serial mode (m? to display available modes)";
+    "C> m for serial mode (m? to display available modes)" \
+    "C> Start string with > to send to device or < to controllers";
 
 // These are used for parsing the serial input (A B and C are USB, 1 and 2 are RS232).
 String rxMsgA = "";
@@ -313,6 +314,15 @@ void loop() {
                 ms.ports[2].println("CONSOLE");
                 Serial1.println("Ser1");
                 Serial2.println("Ser2");
+            } else if (rxMsgC.startsWith(">") && tl > 1) {
+                // Here we send to the device
+                Serial2.print(rxMsgC.substring(1) + delim);
+            } else if (rxMsgC.startsWith("<") && tl > 1) {
+                // Here we send to all listening devices (serial and USB)
+                rxMsgC = rxMsgC.substring(1) + delim;
+                Serial1.print(rxMsgC);
+                ms.ports[0].println(rxMsgC);
+                ms.ports[1].println(rxMsgC);
             } else if (rxMsgC.startsWith("m")) {
                 if (tl > 1) {
                     if (rxMsgC.charAt(1) == '?') {
@@ -368,25 +378,25 @@ void loop() {
                 if (tl > 1) {
                     // Exotic delimiters (max 10 characters stored in the EEPROM) are handled here. They are appended to commands sent to the device.
                     // However, for commands returned by the device, only the first character is checked.
-                    String delim_temp = rxMsgC.substring(1);
-                    delim_temp.replace("\\n","\n");
-                    delim_temp.replace("\\r","\r");
+                    rxMsgC = rxMsgC.substring(1);
+                    rxMsgC.replace("\\n","\n");
+                    rxMsgC.replace("\\r","\r");
 
                     uint32_t s_from=0;
                     while (1) {
-                        s_from = delim_temp.indexOf("\\x",s_from);
+                        s_from = rxMsgC.indexOf("\\x",s_from);
                         if (s_from == -1)
                             break;
 
-                        char c = (char)(x2i(delim_temp.substring(s_from+2,s_from+4)));
-                        delim_temp = delim_temp.substring(0,s_from)+c+delim_temp.substring(s_from+4);
+                        char c = (char)(x2i(rxMsgC.substring(s_from+2,s_from+4)));
+                        rxMsgC = rxMsgC.substring(0,s_from)+c+rxMsgC.substring(s_from+4);
                         s_from += 4;
-                        if (s_from >= delim_temp.length())
+                        if (s_from >= rxMsgC.length())
                             break;
                     }
 
-                    if (delim_temp != delim) {
-                        delim = delim_temp;
+                    if (rxMsgC != delim) {
+                        delim = rxMsgC;
                         writeString(2,delim);
                     }
                 }
@@ -395,7 +405,7 @@ void loop() {
                 ms.ports[2].print(delimMsg);
                 ms.ports[2].println(escapeString(delim));
             } else {
-                // An error only if we didn't press ENTER
+                // An error only if we didn't just press ENTER
                 if (tl > 0) isError = true;
             }
 

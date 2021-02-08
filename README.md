@@ -75,7 +75,7 @@ Other than that, everything needed to compile Y-Pipe should be already installed
 # Usage
 At any time, comments can be typed in the console window. These can be used to describe *in plain text* what the command issued was, causing the serial instructions that follow. There is a length limit before the comment simply continues to the next line. Also, if some serial traffic occurs while typing a comment, the comment will be truncated gracefully.
 
-The *interactive* console mode is entered by pressing ENTER on an empty line. This stops the logging of traffic from the controllers and device, until console mode is exited by typing 'x'.
+The *interactive* console mode is entered by pressing \[ENTER\] on an empty line. This stops the logging of traffic from the controllers and device, until console mode is exited by pressing \[ENTER\] again. Meanwhile, traffic between controllers and devices is *not* interrupted, just its logging to the console terminal.
 
 A few things can be changed and saved in the Y-Pipe EEPROM memory:
 * 'b' typed on its own in the console displays the current baud rate between controller and device. b+BAUDRATE (e.g. 'b115200') changes the baud rate. Valid options are 1200, 2400, 4800, 9600, 19200, 38400, 57600 and 115200.
@@ -85,6 +85,8 @@ A few things can be changed and saved in the Y-Pipe EEPROM memory:
 Additional commands are:
 * 'H' for help
 * 'W' for who am I? which displays each role on the corresponding terminal window (if connected)
+* typing '>' before a string sends the string to the device.
+* typing '<' before a string sends the string to *all* the controllers.
 * Simply press \[ENTER\] to return to logging mode.
 
 # Limitations
